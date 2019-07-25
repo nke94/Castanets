@@ -1,5 +1,17 @@
 
-# How to build & run distributed-chrome
+# What is CASTANETS?
+
+Castanets is an evolutionary **web browser for next generation networks** (5G and beyond).  
+
+The proliferation of smart electronic devices and the advancement of high-speed wireless networks have been driving the exponential growth of web users and web applications. As specifications of the web technologies expand, the memory consumption and computing power requirements of the browsers are increasing significantly. However, the web browsers are becoming unsuitable for embedded devices and consumer electronics devices. Unlike PCs and smartphones, both computing capabilities and memory capacities are extremely limited in IoT-enabled devices. Recent Chromium, in general, consume more than 150MB of memories to view popular websites. When the number of tabs increases, the memory usages increase proportionally and turn out to be unacceptable for embedded devices.  
+
+Considering aforementioned aspects of browser overheads, we propose an in-home edge-distributed split web browser; Castanets. The split rendering processes run memory intensive component on the distributed in-home edge devices while the browser process runs GPU intensive and composites results on the screen.  
+
+If you are interested to join the project, _don't hesitate to contact us!_  
+For any inquiries or questions regarding Castanets, we will gladly reply!  
+**castanets _atsign_ samsung.com**
+
+# How to build & run castanets
 
 
 ### Install depot_tools
@@ -24,19 +36,19 @@ $ export PATH="$PATH:/path/to/depot_tools"
 Create a chromium directory for the checkout and change to it (you can call this whatever you like and put it wherever you like, as long as the full path has no spaces):
 
 ```sh
-$ mkdir path/to/distributed_chrome && cd path/to/distributed_chrome
+$ mkdir $PWD/castanets && cd $PWD/castanets
 ```
 
 Download the code using the command below.
 
 ```sh
-$ git clone https://github.sec.samsung.net/RS7-HighPerformanceWeb/distributed_chrome.git src
+$ git clone https://github.com/Samsung/castanets src
 ```
 
-If you did not specify the 'src' directory name at the end of the command, the source code would have been downloaded to the 'distributed_chrome' directory. In this case, change the directory name.
+If you did not specify the 'src' directory name at the end of the command, the source code would have been downloaded to the 'castanets' directory. In this case, change the directory name.
 
 ```sh
-$ mv distributed_chrome src
+$ mv castanets src
 ```
 
 Install additional build dependencies
@@ -60,31 +72,6 @@ Once you've run install-build-deps at least once, you can now run the Chromium-s
 $ gclient sync --with_branch_head
 ```
 
-If you get an SSL certificate error at Seoul R&D center, follow the directions below.
-
-```sh
-$ cd path/to/depot_tools
-$ git checkout 3beabd0aa40ca39216761418587251297376e6aa
-$ git apply path/to/distributed_chrome/src/build/SRnD_depot_tools.patch
-```
-If you get SSL3_GET_SERVER_CERTIFICATE error, follow the directions below.
-
-
-Add below line to .bashrc file.
-
-```sh
-export NO_AUTH_BOTO_CONFIG=~/.boto
-```
-
-
-Create ~/.boto file for the following content. 
-
-```sh
-[Boto]
-proxy = 10.112.1.178
-proxy_port = 8080
-https_validate_certificates = False
-```
 
 ### Setting up the build
 
@@ -98,38 +85,44 @@ $ gn gen out/Default
 You set build arguments on a build directory by typing:
 
 ```sh
-$ gn args out/Default
-```
-
-This will bring up an editor. Type build args into that file like this:
-
-```
-enable_chromie=true
-enable_nacl=false
+$ gn gen --args='enable_castanets=true enable_nacl=false' out/Default
 ```
 
 
-### Build distributed-chrome
+### Build castanets
 
 
-Build Distributed Chromium (the “chrome” target) with Ninja using the command:
+Build castanets (the “chrome” target) with Ninja using the command:
 
 ```sh
 $ ninja -C out/Default chrome
 ```
 
+### Run castanets in a local machine (test only)
 
-### Run distributed-chrome
+Start first chrome instance: Browser Process
+
+```sh
+$ out/Default/chrome <URL>
+```
+
+Start second chrome instance: Renderer Process
+
+```sh
+$ out/Default/chrome --type=renderer --server-address=127.0.0.1
+```
+
+### Run castanets in a distributed environment
 
 
 Device A: Browser Process
 
 ```sh
-$ ./chrome <URL>
+$ out/Default/chrome <URL>
 ```
 
 Device B: Renderer Process
 
 ```sh
-$ ./chrome --type=renderer --server-address=<IP ADDR>
+$ out/Default/chrome --type=renderer --server-address=<IP ADDR>
 ```
