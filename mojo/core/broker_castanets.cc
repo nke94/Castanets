@@ -9,6 +9,7 @@
 
 #include "base/bind.h"
 #include "base/logging.h"
+#include "base/memory/castanets_memory_mapping.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/shared_memory_helper.h"
 #include "base/memory/shared_memory_tracker.h"
@@ -144,17 +145,12 @@ BrokerCastanets::BrokerCastanets(base::ProcessHandle client_process,
   sync_channel_ = PlatformHandle(base::ScopedFD(
       connection_params.server_endpoint().platform_handle().GetFD().get()));
 
-  base::MessageLoopCurrent::Get()->AddDestructionObserver(this);
-
   channel_ = Channel::Create(this, std::move(connection_params),
                              base::ThreadTaskRunnerHandle::Get());
   channel_->Start();
 }
 
 BrokerCastanets::~BrokerCastanets() {
-  // We're always destroyed on the creation thread, which is the IO thread.
-  base::MessageLoopCurrent::Get()->RemoveDestructionObserver(this);
-
   if (channel_)
     channel_->ShutDown();
 }
@@ -166,7 +162,7 @@ bool BrokerCastanets::SyncSharedBuffer(
   if (!tcp_connection_)
     return true;
 
-  const base::SharedMemoryTracker::MappingInfo* mapping =
+  scoped_refptr<base::CastanetsMemoryMapping> mapping =
       base::SharedMemoryTracker::GetInstance()->FindMappedMemory(guid);
   if (!mapping) {
     if (base::SharedMemoryTracker::GetInstance()->Find(guid) < 0)
@@ -174,8 +170,8 @@ bool BrokerCastanets::SyncSharedBuffer(
     else
       return MOJO_RESULT_UNIMPLEMENTED;
   }
-  SyncSharedBufferImpl(guid, static_cast<uint8_t*>(mapping->mapped_memory),
-                       offset, sync_size, mapping->mapped_size);
+  SyncSharedBufferImpl(guid, static_cast<uint8_t*>(mapping->GetMemory()),
+                       offset, sync_size, mapping->mapped_size());
   return true;
 }
 
@@ -232,12 +228,12 @@ void BrokerCastanets::OnBufferSync(uint64_t guid_high, uint64_t guid_low,
           << ", sync_size: " << sync_bytes
           << ", buffer_size: " << buffer_bytes;
 
-  const base::SharedMemoryTracker::MappingInfo* mapping =
+  scoped_refptr<base::CastanetsMemoryMapping> mapping =
       base::SharedMemoryTracker::GetInstance()->FindMappedMemory(guid);
   if (mapping) {
-    CHECK_GE(mapping->mapped_size, offset + sync_bytes);
-    memcpy(static_cast<uint8_t*>(mapping->mapped_memory) + offset,
-           data, sync_bytes);
+    CHECK_GE(mapping->mapped_size(), offset + sync_bytes);
+    memcpy(static_cast<uint8_t*>(mapping->GetMemory()) + offset, data,
+           sync_bytes);
 
     SendSyncAck(guid_high, guid_low);
     return;
@@ -531,12 +527,6 @@ void BrokerCastanets::OnChannelError(Channel::Error error) {
       error == Channel::Error::kReceivedMalformedData) {
     process_error_callback_.Run("Broker host received malformed message");
   }
-
-  delete this;
-}
-
-void BrokerCastanets::WillDestroyCurrentMessageLoop() {
-  delete this;
 }
 
 }  // namespace core

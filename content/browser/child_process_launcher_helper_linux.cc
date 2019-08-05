@@ -21,6 +21,13 @@
 #include "services/service_manager/zygote/host/zygote_communication_linux.h"
 #include "services/service_manager/zygote/host/zygote_host_impl_linux.h"
 
+#if defined(CASTANETS)
+#include "dbus/bus.h"
+#include "dbus/message.h"
+#include "dbus/object_path.h"
+#include "dbus/object_proxy.h"
+#endif
+
 namespace content {
 namespace internal {
 
@@ -46,6 +53,47 @@ ChildProcessLauncherHelper::CreateNamedPlatformChannelOnClientThread() {
 
 void ChildProcessLauncherHelper::BeforeLaunchOnClientThread() {
   DCHECK_CURRENTLY_ON(client_thread_id_);
+#if defined(CASTANETS)
+  // Request discovery client to run renderer process on the remote node.
+  if (GetProcessType() == switches::kRendererProcess &&
+      !base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kEnableForking)) {
+    dbus::Bus::Options bus_options;
+    bus_options.bus_type = dbus::Bus::SESSION;
+    bus_options.connection_type = dbus::Bus::SHARED;
+    scoped_refptr<dbus::Bus> bus = new dbus::Bus(bus_options);
+
+    dbus::ObjectProxy* object_proxy =
+        bus->GetObjectProxy("discovery.client.listener",
+                            dbus::ObjectPath("/discovery/client/object"));
+
+    if (!object_proxy) {
+      LOG(ERROR) << "Fail to get object proxy.";
+      return;
+    }
+
+    dbus::MethodCall method_call("discovery.client.interface", "RunService");
+    dbus::MessageWriter writer(&method_call);
+    writer.AppendArrayOfStrings(command_line()->argv());
+
+    std::unique_ptr<dbus::Response> response(object_proxy->CallMethodAndBlock(
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT));
+
+    if (response.get()) {
+      bool stat;
+      dbus::MessageReader reader(response.get());
+      reader.PopBool(&stat);
+      if (stat) {
+        LOG(INFO) << "Success to run renderer process on the remote node.";
+      } else {
+        LOG(ERROR) << "Fail to run renderer process on the remote node.";
+      }
+    } else {
+      LOG(ERROR) << "Fail to run renderer process on the remote node.";
+    }
+    bus->ShutdownAndBlock();
+  }
+#endif
 }
 
 std::unique_ptr<FileMappedForLaunch>
@@ -116,9 +164,14 @@ ChildProcessLauncherHelper::LaunchProcessOnLauncherThread(
   }
 
 #if defined(CASTANETS)
-  if (!base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kEnableForking)) {
+  if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kEnableForking)) {
     Process castanets_process;
-    castanets_process.process = base::Process(base::kCastanetsProcessHandle);
+    // Positive: normal process
+    // 0: kNullProcessHandle
+    // Negative: Castanets Process
+    castanets_process.process =
+        base::Process(base::kCastanetsProcessHandle - child_process_id_);
     *launch_result = LAUNCH_RESULT_SUCCESS;
     return castanets_process;
   }

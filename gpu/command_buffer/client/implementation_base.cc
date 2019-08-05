@@ -173,6 +173,12 @@ gpu::ContextResult ImplementationBase::Initialize(
 
 void ImplementationBase::WaitForCmd() {
   TRACE_EVENT0("gpu", "ImplementationBase::WaitForCmd");
+#if defined(CASTANETS)
+  // Call this api to synchronize the result shared memory.
+  helper_->SyncResultData(GetResultShmId(), GetResultShmOffset(),
+                          kMaxSizeOfSimpleResult);
+#endif
+
   helper_->Finish();
 }
 
